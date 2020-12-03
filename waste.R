@@ -197,6 +197,7 @@ SitesCor <- Sites %>%
 #                                               +no_defs "), Sites) %>% spTransform(CRS("+proj=longlat +datum=WGS84" ))
 
 Sites$X <- SitesCor$X
+
 Sites$Y <- SitesCor$Y
 
 # colnames to export to latex doc 
