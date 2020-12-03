@@ -10,7 +10,7 @@ install.packages("rgdal") # FOR MAC
 
 install.packages("raster") # TO MANIPULATE RASTERS
 
-install.packages("shinyjs") #FOR COOL COLORED MAPS
+install.packages("shinyjs") #FOR COOL COLORED MAPS tests
 
 install.packages("leaflet.extras")
 install.packages('reshape')
@@ -42,15 +42,18 @@ library(dplyr)
 library(spatstat)
 library(matrixcalc)
 library(methods)
-library(igraph)
+library(igraph) # to do networks analysis
 library(plsgenomics)
 
 #### Definitions ####
+# this function is usefull for filtering data 
 
 `%nin%` = Negate(`%in%`)
 
 
 #### LOAD DATA ####
+
+# all the data that is used at some point is loaded here. A lot of it ended up just being used for tests and experiments
 
 ukcountry <- st_read("ukpoly/Uk_poly.shp") %>% st_transform(CRS("+proj=longlat +datum=WGS84"))
 
@@ -96,7 +99,7 @@ head(Received)
 # unique(Received$`EWC Sub Chapter`)
 
 
-#### WASTE CATEGORy ####
+#### WASTE CATEGORY ####
 #
 
 #Selecting the category of waste
@@ -117,17 +120,16 @@ received <- filter(Received, `Basic Waste Cat` %in% "Hhold/Ind/Com") %>%
 received
 
 received_columns <- colnames(received)
-
+## Overview of the variables that are kept
 view(received_columns)
 
 #### DATA STUDY ####
 
-Regions <- unique(Sites$`Facility RPA`)
+Regions <- unique(Sites$`Facility RPA`) # get the names of the regions
 
-england <- ukcountry[which(ukcountry$name == "England"),] %>% st_transform(.,27700) %>% as.owin()
+#class(england)
 
-class(england)
-
+# generate random sample of data for inspection. 
 view(received[sample(c(1:10000), size = 200),]) # inspect data set
 
 view(ukwards)
@@ -142,11 +144,6 @@ tm_shape(ukwards) + tm_polygons()
 
 # The total waste received from within England
 view(sum(received$`Tonnes Received`[which(received$`Origin Region` %in% Regions)]))
-
-#WASTE facilities that accpet more that 10000 TONNES
-receivedBig <- group_by(received, `Site Name`, `Easting`, `Northing`) %>% 
-  summarize( `Site Capacity` = sum(`Tonnes Received`)) %>% 
-    filter(`Site Capacity` > 10000)
 
 unique(received$Fate)
 
@@ -169,7 +166,8 @@ matrix.heatmap(log(WastereceivedMatrix))
 
 matrix.trace(WastereceivedMatrix)/sum(WastereceivedMatrix)
 
-sum(WastereceivedMatrix)/23e6
+# S_m index of waste movement
+s_m <- sum(WastereceivedMatrix)/23e6 
 
 #
 #### SITES ANALYSIS ####
@@ -203,11 +201,12 @@ Sites$Y <- SitesCor$Y
 # colnames to export to latex doc 
 colnames(Sites) %>% as.data.frame() %>% view()
 
+# change the name of yorkshire for merging with spatial data
 Sites$`Facility RPA` <- str_replace(Sites$`Facility RPA`, pattern = coll("Yorks & Humber"), replacement = "Yorkshire and The Humber")
 
 unique(Sites$`Facility RPA`)
 
-
+# projecting the country polygon to assiciate with the data.
 ukcountry <-  ukcountry %>% st_transform(.,crs = 27700)
 
 ukcountry
@@ -216,36 +215,21 @@ england <- ukcountry[which(ukcountry$name=="England"),] %>% st_transform(.,27700
 
 england
 
+
 tmap_mode("view")
 
 tm_shape(england) + tm_polygons() +
   tm_shape(Sites) + tm_dots()
 
-#londonBbox <-  c(-0.6564,51.2146,0.4271,51.7347)
-
-# tm_shape(londonBoroughs) + tm_polygons(col = "white",
-#                                  border.col = "black",
-#                                  lwd = .5 ) +
-#   tm_shape(Sites[which(Sites$`Site Category` %in% c("Treatment","Transfer")),]) + 
-#   tm_bubbles(size = "total treated",
-#              col = "Site Category",
-#              border.col = "black",
-#              clustering = TRUE,
-#              legend.size.is.portrait = T,
-#              palette = "Accent",
-#              n = 8
-#              )
-#"MRS","Transfer", "Treatment"
-
 window <- as.owin(england)
 
 plot(window)
 
-window$yrange
+#window$yrange
 
-range(Sites$Y)
+#range(Sites$Y)
 
-plot(x = Sites$X, y = Sites$Y)
+#plot(x = Sites$X, y = Sites$Y)
 
 #### Transfer facilities point pattern ####
 
@@ -256,9 +240,10 @@ par(mfrow=c(1,1))
 sitesTransfer.ppp <- ppp(x = Sites$X[which(Sites$`Site Category`=="Transfer")], 
                          y = Sites$Y[which(Sites$`Site Category`=="Transfer")],
                          window = window)
+#point plot of the facilities
 sitesTransfer.ppp %>% plot(.,pch=16,cex=0.5, 
      main="Transfer facilities")
-
+#density plot of the facilities
 sitesTransfer.ppp %>% density(., sigma=5000) %>%
   plot()
 # Ripley K for transfer 
@@ -278,7 +263,7 @@ sitesTreatment.ppp %>% plot(.,pch=16,cex=0.5,
 
 plot.new()
 par(mfrow=c(1,1))
-
+#density plot with city names
 sitesTreatment.ppp %>% density(., sigma=5000) %>%
   plot(.,main = "Treatment sites density") + text(x = Cities$X, y = Cities$Y, labels=Cities$name, col = "green", cex = 1, pos = 3)
 
@@ -296,7 +281,7 @@ Cities <- Cities %>% as.data.frame() %>% st_as_sf(.,coords = c("x", "y"), crs = 
 Cities$name <- c("London", "Manchester + Liverpool", "Birmingham")
 
 #
-#### MRS facilities point pattern ####
+#### MRS facilities point pattern (not used in final work) ####
 
 sitesMRS.ppp <- ppp(x = Sites$X[which(Sites$`Site Category`=="MRS" & Sites$`Facility RPA` == Regions[i])], 
                           y = Sites$Y[which(Sites$`Site Category`=="MRS" & Sites$`Facility RPA` == Regions[i])],
@@ -317,16 +302,13 @@ Kmrs <- sitesMRS.ppp %>%
 
 #### K est subplot for regions facilities ####
 
-#window = as.owin(ukregion[which(ukregion$rgn18nm == Regions[2]),])
-# i <- 9
-# regwindow <- ukregion[which(ukregion$rgn18nm == Regions[9]),] %>% st_transform(.,27700) %>% as.owin(.)
-# plot(regwindow)
-
 Regions <- unique(ukregion$rgn18nm)%>% as.character()
 summary(Regions)
 
 plot.new()
 par(mfrow=c(3,3))
+
+# for loop to perform and plot ripleys K for the regions
 for (i in c(1:9)) {
   regwindow <- ukregion[which(ukregion$rgn18nm == Regions[i]),] %>% st_transform(.,27700) %>% as.owin(.)
   sites.ppp <- ppp(x = Sites$X[which(Sites$`Site Category`=="Transfer" & Sites$`Facility RPA` == Regions[i])], 
@@ -339,7 +321,7 @@ for (i in c(1:9)) {
 }
 
 
-#### GRAPH THEORY ####
+#### GRAPH THEORY (not used in the final version) #### 
 
 g <- graph_from_adjacency_matrix(WastereceivedMatrix,mode = "directed", weighted = T, diag = F, add.colnames = T)
 
@@ -464,11 +446,9 @@ plot(WasteCorDistr$distrPop, WasteCorDistr$distrWaste)
 
 view(WasteCorDistr)
 
-### by AREA
+### by AREA # final version
 
 wastefate <-  Sitesdata %>% group_by(.,Fate) %>% summarise(`treated` = sum(`total treated`))
-
-sum(wastefate$treated[c(1:6,9)])
 
 #
 
@@ -490,6 +470,8 @@ summary(wasteareamodel)
 
 #london <- c("NW","N","E","SE","SW","W")
 
+
+# plotting the linear regressions
 plot.new()
 plot(x= WasteCorArea$areaPop, y= WasteCorArea$areaWaste,main = "Waste treatment by population" , xlab = "Population", ylab = "Waste received")
 lines(x=WasteCorArea$areaPop, y=wasteareamodel$fitted.values, col = "red")
@@ -497,9 +479,11 @@ text(x= WasteCorArea$areaPop[which(WasteCorArea$areaWaste == max(WasteCorArea$ar
 legend('bottomright',inset=0.05,c("Fitted"),col = c("red"),lty=1,cex=1.5)
 #view(WasteCorArea)
 
+# check the min
 WasteCorArea[which(WasteCorArea$areaWaste == min(WasteCorArea$areaWaste)),]
 
 # VERY IMPORTANT STEPS THAT ARE DONE ONCE FOR UKPOST
+# it unifies merges polygons in order to get the right spatial precision of post code areas
 #ukpost$area <- str_extract(ukpost$name,"^[a-zA-Z][a-zA-Z]?")
 #ukpost <- group_by(ukpost, area) %>% summarise(geometry = sf::st_union(geometry))
 
@@ -507,8 +491,10 @@ WasteCorArea <- merge(ukpost,WasteCorArea, by.x = "area", by.y ="Area")
 
 WasteCorArea$resid <- wasteareamodel$residuals
 
+# residuals plot 
 plot(density(WasteCorArea$resid), main = "Residuals of transfer fit", ylab = "Density of residuals", xlab = "deviation")
 
+# mode selection for tmap
 #tmap_mode("plot")
 
   tm_shape(WasteCorArea) + tm_polygons("areaWaste",
@@ -544,44 +530,8 @@ plot(density(WasteCorArea$resid), main = "Residuals of transfer fit", ylab = "De
   #[which(WasteCorArea$area =="W"), ]
   
 #
-#### WASTE by REGION CORRELATION ####
 
-ukregion$rgn18nm
-regionpop$AREA[7] <- "East of England"
-
-region  <-  merge(ukregion,regionpop,by.x ="rgn18nm", by.y = "AREA")
-
-tmap_mode("view")
-tm_shape(region) + tm_polygons("X2018",
-                               palette = "viridis", 
-                               n = 7, 
-                               contrast = c(0, 0.71)
-                               )
-Sitesdata <- Sites@data
-unique(Sitesdata$Fate)
-
-unique(Sitesdata$`Site Category`)
-unique(Sitesdata$Fate)
-
-regionwaste <- group_by(Sitesdata[which(Sitesdata$`Site Category` == "Treatment" & Sitesdata$Fate == "Treatment" ),], `Facility RPA`) %>% summarize(`WasteTreated` = sum(`total treated`))
-
-# & Sitesdata$Fate == "Treatment"
-# [which(Sitesdata$`Site Category` == "Treatment"),] 
-
-regionWaste <- merge(region,regionwaste, by.x = "rgn18nm", by.y ="Facility RPA")
-
-regionWaste$WasteTreated <- regionWaste$WasteTreated/1000 # in thousantds of tonnes  
-
-model <- lm(`WasteTreated`~`X2018`,regionWaste)
-summary(model)
-
-plot.new()
-plot(regionWaste$X2018,regionWaste$WasteTreated)
-
-#,labels = regionWaste$rgn18nm, pos = 3
-
-#### MAP OF TONNES OF WASTE THAT COMES FROM ANOTHER REGION ####
-#### PLOTS ####
+#### PLOTS of regional recycling rate ####
 
 #TYPES OF WASTE : 
 #Total
@@ -590,6 +540,9 @@ plot(regionWaste$X2018,regionWaste$WasteTreated)
 #Incineration without EfW
 #Recycled/composted
 #Other
+  
+# Getting the recycling rates for each regions in england. 
+  
 wastetot <- filter(wasteusela, Year %in% "2018-19")
 wastetot <-  wastetot[,c("Geographical Code",	"ONS Code",	"Jpp Order", 
                         "Region","Landfilled","Incineration with EfW",	"Incineration without EfW 4",	
@@ -619,10 +572,6 @@ wasteMap
 
 tmap_mode("plot")
 
-#qtm(niMap)
-
-
-png(filename="RecycleRateEngland")
 tm_shape(wasteMap) + 
   tm_polygons("RecycleRate", 
               style="fixed",
@@ -639,5 +588,3 @@ tm_shape(wasteMap) +
                 legend.position = c("left","top"),
                 legend.bg.color = "white",
                 legend.bg.alpha = 0)
-  
-dev.off()
