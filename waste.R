@@ -451,6 +451,10 @@ view(WasteCorDistr)
 wastefate <-  Sitesdata %>% group_by(.,Fate) %>% summarise(`treated` = sum(`total treated`))
 
 #
+# VERY IMPORTANT STEPS THAT ARE DONE ONCE FOR UKPOST
+# it unifies merges polygons in order to get the right spatial precision of post code areas
+ukpost$area <- str_extract(ukpost$name,"^[a-zA-Z][a-zA-Z]?")
+ukpost <- group_by(ukpost, area) %>% summarise(geometry = sf::st_union(geometry))
 
 transfer <- c("Transfer (R)","Transfer (D)")
 treatment <- c("Recovery","Treatment","Incineration with energy recovery")
@@ -458,13 +462,13 @@ other <- c("Not reported","Incineration without energy recovery","Landfill","Oth
 
 popArea <- group_by(postcodePop, Area) %>% summarise(`areaPop` = sum(`Variable: All usual residents`))
 
-WasteCorArea <- group_by(Sitesdata[which(Sitesdata$`Site Category` == "Treatment"),], Area) %>% summarise(`areaWaste` = sum(`total treated`))
+WasteCorArea <- group_by(Sitesdata[which(Sitesdata$Fate %in% transfer),], Area) %>% summarise(`areaWaste` = sum(`total treated`))
 
 #[which(Sitesdata$`Site Category` == "Treatment"  & Sitesdata$Fate == "Treatment" ),]
 
 WasteCorArea <- merge(WasteCorArea, popArea, by.x = "Area", by.y = "Area") 
 
-wasteareamodel <-  lm(`areaWaste` ~ `areaPop`+ 0, WasteCorArea) #%>% summary()
+wasteareamodel <-  lm(`areaWaste` ~ `areaPop`, WasteCorArea) #%>% summary()
 
 summary(wasteareamodel)
 
@@ -482,10 +486,6 @@ legend('bottomright',inset=0.05,c("Fitted"),col = c("red"),lty=1,cex=1.5)
 # check the min
 WasteCorArea[which(WasteCorArea$areaWaste == min(WasteCorArea$areaWaste)),]
 
-# VERY IMPORTANT STEPS THAT ARE DONE ONCE FOR UKPOST
-# it unifies merges polygons in order to get the right spatial precision of post code areas
-#ukpost$area <- str_extract(ukpost$name,"^[a-zA-Z][a-zA-Z]?")
-#ukpost <- group_by(ukpost, area) %>% summarise(geometry = sf::st_union(geometry))
 
 WasteCorArea <- merge(ukpost,WasteCorArea, by.x = "area", by.y ="Area")
 
@@ -517,16 +517,18 @@ plot(density(WasteCorArea$resid), main = "Residuals of transfer fit", ylab = "De
                                        border.alpha = 0) + 
     tmap_options(max.categories = 95)
   
-  tm_shape(WasteCorArea) + tm_polygons("area",
-                                       title = "Areas",
-                                       palette = "Spectral",
+  tmap_mode("plot")
+  
+  tm_shape(WasteCorArea) + tm_polygons("resid",
+                                       title = "Residuals",
+                                       palette = "RdBu",
                                        n=4,
                                        contrast = c(0,1),
                                        midpoint = 0,
                                        lwd = 0,
                                        border.alpha = 0
                                        ) + 
-    tmap_options(max.categories = 95,legend.show = F)
+    tmap_options(max.categories = 95,legend.show = T)
   #[which(WasteCorArea$area =="W"), ]
   
 #
